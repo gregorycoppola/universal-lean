@@ -1,7 +1,9 @@
 import UniversalLean.AgentCompleteness.Preliminaries
+import UniversalLean.AgentCompleteness.Binary
 import UniversalLean.AgentCompleteness.BooleanGates
 import UniversalLean.AgentCompleteness.Layers
 import UniversalLean.AgentCompleteness.MainTheorems
 import UniversalLean.AgentCompleteness.TuringMachine
 import UniversalLean.AgentCompleteness.Encoding
 import UniversalLean.AgentCompleteness.TMCorrectness
+import UniversalLean.AgentCompleteness.ExampleTM
