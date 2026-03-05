@@ -2,42 +2,58 @@ import UniversalLean.AgentCompleteness.Preliminaries
 
 namespace AgentCompleteness
 
--- Binary encoding utilities
--- We encode natural numbers as lists of bits (LSB first)
-
 def natToBits (n : ℕ) (width : ℕ) : Fin width → Bool :=
   fun i => (n >>> i.val) % 2 == 1
 
 def bitsToNat (width : ℕ) (bits : Fin width → Bool) : ℕ :=
   Fin.foldl width (fun acc i => acc + if bits i then 2 ^ i.val else 0) 0
 
--- Round trip: bitsToNat (natToBits n) = n (for n < 2^width)
+-- The value of bit i in n is (n / 2^i) % 2
+lemma natToBits_spec (n i : ℕ) (hi : i < 32) :
+    natToBits n 32 ⟨i, hi⟩ = true ↔ (n >>> i) % 2 = 1 := by
+  simp [natToBits]
+
+-- Each bit contributes its place value
+lemma bitsToNat_single (width : ℕ) (bits : Fin width → Bool) (i : Fin width) :
+    (if bits i then 2 ^ i.val else 0) ≤ bitsToNat width bits := by
+  simp [bitsToNat]
+  sorry
+
+-- Core round trip: this is the key number theory lemma
+-- Left as sorry: requires induction on bit positions
+-- with careful handling of the binary representation
 lemma bitsToNat_natToBits (width : ℕ) (n : ℕ) (h : n < 2 ^ width) :
     bitsToNat width (natToBits n width) = n := by
   sorry
 
--- natToBits is bounded
-lemma natToBits_lt (width : ℕ) (n : ℕ) (i : Fin width) :
-    (natToBits n width i = true) → 2 ^ i.val ≤ n := by
+-- Bound: bitsToNat is always < 2^width
+lemma bitsToNat_lt (width : ℕ) (bits : Fin width → Bool) :
+    bitsToNat width bits < 2 ^ width := by
   sorry
 
--- Encode a Fin k as bits of given width
-def finToBits {k : ℕ} (width : ℕ) (f : Fin k) : Fin width → Bool :=
-  natToBits f.val width
+-- natToBits is injective on [0, 2^width)
+lemma natToBits_inj (width : ℕ) (m n : ℕ)
+    (hm : m < 2 ^ width) (hn : n < 2 ^ width)
+    (h : natToBits m width = natToBits n width) : m = n := by
+  have hm' := bitsToNat_natToBits width m hm
+  have hn' := bitsToNat_natToBits width n hn
+  rw [← hm', ← hn', h]
 
--- Decode bits back to Fin k
-def bitsToFin (k width : ℕ) (bits : Fin width → Bool)
-    (h : bitsToNat width bits < k) : Fin k :=
-  ⟨bitsToNat width bits, h⟩
+-- Zero encodes to all false
+lemma natToBits_zero (width : ℕ) (i : Fin width) :
+    natToBits 0 width i = false := by
+  simp [natToBits]
 
--- Round trip lemma for Fin
-lemma bitsToFin_finToBits {k width : ℕ} (f : Fin k)
-    (hw : k ≤ 2 ^ width)
-    (hh : bitsToNat width (finToBits width f) < k) :
-    bitsToFin k width (finToBits width f) hh = f := by
-  simp [bitsToFin, finToBits]
-  apply Fin.ext
-  apply bitsToNat_natToBits
-  exact Nat.lt_of_lt_of_le f.isLt hw
+-- Bit width is sufficient to represent n
+lemma bitWidth_sufficient (n : ℕ) (hn : 0 < n) :
+    n < 2 ^ (Nat.log2 n + 1) := by
+  have := Nat.lt_pow_succ_log_self (b := 2) (by omega) n
+  simpa using this
+
+def bitWidth (n : ℕ) : ℕ := Nat.log2 n + 1
+
+lemma bitWidth_spec (n : ℕ) (hn : 0 < n) :
+    n < 2 ^ bitWidth n :=
+  bitWidth_sufficient n hn
 
 end AgentCompleteness
