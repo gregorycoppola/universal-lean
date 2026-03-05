@@ -1,94 +1,137 @@
 import UniversalLean.AgentCompleteness.TuringMachine
 import UniversalLean.AgentCompleteness.Layers
+import UniversalLean.AgentCompleteness.Binary
 
 namespace AgentCompleteness
 
--- Encoding strategy:
--- We lay out the CircuitState as:
---   tokens 0..tapeLen-1  : tape cells
---   token  tapeLen       : head position
---   token  tapeLen+1     : machine state
+-- Encoding layout:
+-- tokens 0..tapeLen-1          : tape cells (1 bit each)
+-- tokens tapeLen..tapeLen+hw-1 : head position (binary, hw bits)
+-- tokens tapeLen+hw..n-1       : machine state (binary, sw bits)
 --
--- n = tapeLen + 2
--- Each token's val encodes the relevant bit
+-- where hw = ceil(log2(tapeLen)), sw = ceil(log2(k))
 
--- The number of circuit tokens needed for a TM config
-def tmTokenCount (tapeLen : ℕ) : ℕ := tapeLen + 2
+-- Bit width needed to represent values < n
+def bitWidth (n : ℕ) : ℕ := Nat.log2 n + 1
 
--- Build a trivial program (identity wiring - each gate reads itself)
--- Real program would encode TM transition function
+def tmTokenCount (tapeLen k : ℕ) : ℕ :=
+  tapeLen + bitWidth tapeLen + bitWidth k
+
 def trivialProgram (n depth : ℕ) : Program n depth :=
   fun _layer j => { wire1 := j, wire2 := j }
 
--- Encode a TMConfig into a CircuitState
--- For now: tape bits go into token vals, head/state encoded in last two tokens
-def encode {k tapeLen depth : ℕ}
-    (hk : 0 < k)
-    (hd : 0 < depth)
-    (cfg : TMConfig k tapeLen) :
-    CircuitState (tmTokenCount tapeLen) depth :=
-  fun i =>
-    let n := tmTokenCount tapeLen
-    let prog := trivialProgram n depth
-    let iter0 : Fin depth := ⟨0, hd⟩
-    if h : i.val < tapeLen then
-      -- tape cell token
-      { val      := cfg.tape ⟨i.val, h⟩
-        pos      := i
-        gate     := GateType.COPY
-        wire1    := i
-        wire2    := i
-        scratch1 := false
-        scratch2 := false
-        iteration := iter0
-        program  := prog }
-    else if i.val = tapeLen then
-      -- head position token: val = true if head is at position 0 (simplified)
-      -- full encoding would use binary representation
-      { val      := cfg.head.val == 0
-        pos      := i
-        gate     := GateType.COPY
-        wire1    := i
-        wire2    := i
-        scratch1 := false
-        scratch2 := false
-        iteration := iter0
-        program  := prog }
-    else
-      -- machine state token: val = true if in state 0
-      { val      := cfg.state.val == 0
-        pos      := i
-        gate     := GateType.COPY
-        wire1    := i
-        wire2    := i
-        scratch1 := false
-        scratch2 := false
-        iteration := iter0
-        program  := prog }
+-- Helper to build a default token
+def defaultToken {n depth : ℕ}
+    (i : Fin n) (v : Bool) (hd : 0 < depth) (prog : Program n depth) : Token n depth :=
+  { val      := v
+    pos      := i
+    gate     := GateType.COPY
+    wire1    := i
+    wire2    := i
+    scratch1 := false
+    scratch2 := false
+    iteration := ⟨0, hd⟩
+    program  := prog }
 
--- Decode a CircuitState back to tape contents
--- Just reads the val fields of tape tokens
-def decodeTape {depth tapeLen : ℕ}
-    (state : CircuitState (tmTokenCount tapeLen) depth) :
+-- Encode a TMConfig into a CircuitState
+def encode {k tapeLen depth : ℕ}
+    (hk : 0 < k) (hd : 0 < depth)
+    (cfg : TMConfig k tapeLen) :
+    CircuitState (tmTokenCount tapeLen k) depth :=
+  fun i =>
+    let n    := tmTokenCount tapeLen k
+    let hw   := bitWidth tapeLen
+    let sw   := bitWidth k
+    let prog := trivialProgram n depth
+    -- tape region
+    if ht : i.val < tapeLen then
+      defaultToken i (cfg.tape ⟨i.val, ht⟩) hd prog
+    -- head position region (binary encoded)
+    else if hh : i.val < tapeLen + hw then
+      let bitIdx : Fin hw := ⟨i.val - tapeLen, by omega⟩
+      defaultToken i (natToBits cfg.head.val hw bitIdx) hd prog
+    -- machine state region (binary encoded)
+    else
+      let bitIdx : Fin sw := ⟨i.val - (tapeLen + hw), by simp [tmTokenCount] at i; omega⟩
+      defaultToken i (natToBits cfg.state.val sw bitIdx) hd prog
+
+-- Decode tape from CircuitState
+def decodeTape {depth tapeLen k : ℕ}
+    (state : CircuitState (tmTokenCount tapeLen k) depth) :
     Fin tapeLen → Bool :=
   fun i =>
-    let j : Fin (tmTokenCount tapeLen) := ⟨i.val, by simp [tmTokenCount]; omega⟩
+    let j : Fin (tmTokenCount tapeLen k) :=
+      ⟨i.val, by simp [tmTokenCount]; omega⟩
     (state j).val
 
--- Decode full TMConfig (sorry'd: head/state decoding needs binary encoding)
-def decode {k tapeLen depth : ℕ}
-    (hk : 0 < k)
-    (state : CircuitState (tmTokenCount tapeLen) depth) :
-    TMConfig k tapeLen := by
-  sorry
+-- Decode head position from CircuitState
+def decodeHead {depth tapeLen k : ℕ}
+    (state : CircuitState (tmTokenCount tapeLen k) depth)
+    (h : bitsToNat (bitWidth tapeLen)
+      (fun b => (state ⟨tapeLen + b.val, by simp [tmTokenCount]; omega⟩).val) < tapeLen) :
+    Fin tapeLen :=
+  ⟨bitsToNat (bitWidth tapeLen)
+    (fun b => (state ⟨tapeLen + b.val, by simp [tmTokenCount]; omega⟩).val), h⟩
 
--- Key property: decoding tape after encoding gives back original tape
+-- Decode machine state from CircuitState
+def decodeState {depth tapeLen k : ℕ}
+    (state : CircuitState (tmTokenCount tapeLen k) depth)
+    (h : bitsToNat (bitWidth k)
+      (fun b => (state ⟨tapeLen + bitWidth tapeLen + b.val,
+        by simp [tmTokenCount]; omega⟩).val) < k) :
+    Fin k :=
+  ⟨bitsToNat (bitWidth k)
+    (fun b => (state ⟨tapeLen + bitWidth tapeLen + b.val,
+      by simp [tmTokenCount]; omega⟩).val), h⟩
+
+-- Decode full TMConfig
+def decode {k tapeLen depth : ℕ}
+    (hk : 0 < k) (hd : 0 < depth)
+    (hhead : ∀ (state : CircuitState (tmTokenCount tapeLen k) depth),
+      bitsToNat (bitWidth tapeLen)
+        (fun b => (state ⟨tapeLen + b.val, by simp [tmTokenCount]; omega⟩).val) < tapeLen)
+    (hstate : ∀ (state : CircuitState (tmTokenCount tapeLen k) depth),
+      bitsToNat (bitWidth k)
+        (fun b => (state ⟨tapeLen + bitWidth tapeLen + b.val,
+          by simp [tmTokenCount]; omega⟩).val) < k)
+    (state : CircuitState (tmTokenCount tapeLen k) depth) :
+    TMConfig k tapeLen :=
+  { tape  := decodeTape state
+    head  := decodeHead state (hhead state)
+    state := decodeState state (hstate state) }
+
+-- Key lemma: tape round trips through encode/decode
 lemma decode_tape_encode {k tapeLen depth : ℕ}
     (hk : 0 < k) (hd : 0 < depth)
     (cfg : TMConfig k tapeLen) :
     decodeTape (encode hk hd cfg) = cfg.tape := by
   funext i
-  simp [decodeTape, encode, tmTokenCount]
+  simp [decodeTape, encode, defaultToken, tmTokenCount]
   exact i.isLt
+
+-- Key lemma: head round trips (sorry'd: needs bitsToNat_natToBits)
+lemma decode_head_encode {k tapeLen depth : ℕ}
+    (hk : 0 < k) (hd : 0 < depth)
+    (cfg : TMConfig k tapeLen)
+    (h : bitsToNat (bitWidth tapeLen)
+      (fun b => (encode hk hd cfg
+        ⟨tapeLen + b.val, by simp [tmTokenCount]; omega⟩).val) < tapeLen) :
+    decodeHead (encode hk hd cfg) h = cfg.head := by
+  simp [decodeHead, encode, defaultToken]
+  apply Fin.ext
+  sorry
+
+-- Key lemma: state round trips (sorry'd: needs bitsToNat_natToBits)
+lemma decode_state_encode {k tapeLen depth : ℕ}
+    (hk : 0 < k) (hd : 0 < depth)
+    (cfg : TMConfig k tapeLen)
+    (h : bitsToNat (bitWidth k)
+      (fun b => (encode hk hd cfg
+        ⟨tapeLen + bitWidth tapeLen + b.val,
+          by simp [tmTokenCount]; omega⟩).val) < k) :
+    decodeState (encode hk hd cfg) h = cfg.state := by
+  simp [decodeState, encode, defaultToken]
+  apply Fin.ext
+  sorry
 
 end AgentCompleteness
