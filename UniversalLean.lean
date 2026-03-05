@@ -9,6 +9,7 @@ import UniversalLean.AgentCompleteness.TuringMachine
 import UniversalLean.AgentCompleteness.Encoding
 import UniversalLean.AgentCompleteness.TMCorrectness
 import UniversalLean.AgentCompleteness.ExampleTM
+import UniversalLean.AgentCompleteness.FiniteCircuit
 import UniversalLean.AgentCompleteness.ProgramEncoding
-import UniversalLean.AgentCompleteness.TransformerCorrectness
+import UniversalLean.AgentCompleteness.TuringComplete
 import UniversalLean.AgentCompleteness.ProofSummary
