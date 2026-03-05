@@ -2,84 +2,122 @@ import UniversalLean.AgentCompleteness.BooleanGates
 
 namespace AgentCompleteness
 
--- This file formalizes equation (18) from the paper:
--- the FFN computes all G gate functions in parallel and
--- uses the one-hot gate type vector as a selector.
---
--- yj = Σ_t ReLU([gatej]_t + ft(vi1, vi2) - 1.5) * 2
--- This is nonzero only for the active gate type t*
-
--- One-hot vector: exactly one position is true
 def isOneHot {G : ℕ} (v : Fin G → Bool) : Prop :=
   ∃! t, v t = true
 
--- The gated selection function over G gate types
--- Given a one-hot selector and two input bits,
--- apply the selected gate function
 def gatedSelect (G : ℕ) (selector : Fin G → Bool)
     (gates : Fin G → Bool → Bool → Bool)
     (a b : Bool) : Bool :=
   Fin.foldl G (fun acc t =>
     if selector t then gates t a b else acc) false
 
--- Gated selection with one-hot selector picks exactly the active gate
-lemma gatedSelect_oneHot {G : ℕ} (hG : 0 < G)
-    (selector : Fin G → Bool)
-    (gates : Fin G → Bool → Bool → Bool)
-    (a b : Bool)
-    (hOneHot : isOneHot selector)
-    (t* : Fin G) (ht : selector t* = true) :
-    gatedSelect G selector gates a b = gates t* a b := by
-  simp [gatedSelect, isOneHot] at *
-  obtain ⟨t, ht_true, ht_unique⟩ := hOneHot
-  have heq : t = t* := ht_unique t* ht
-  subst heq
-  induction G with
-  | zero => exact absurd hG (by omega)
-  | succ G ih =>
-    sorry
-
--- ReLU gated selection: the real-valued version from equation (18)
--- For one-hot selector s and inputs a, b ∈ {0,1}:
--- Σ_t ReLU(s_t + ft(a,b) - 1.5) * 2 = f_{t*}(a, b)
--- where t* is the unique true position in s
 noncomputable def reluGatedSelect (G : ℕ)
-    (selector : Fin G → ℝ)   -- one-hot, values in {0,1}
+    (selector : Fin G → ℝ)
     (gates : Fin G → ℝ → ℝ → ℝ)
     (a b : ℝ) : ℝ :=
   Fin.foldl G (fun acc t =>
     acc + relu (selector t + gates t a b - 1.5) * 2) 0
 
--- When selector is one-hot with active index t*,
--- reluGatedSelect equals gates t* a b
-lemma reluGatedSelect_oneHot (G : ℕ) (hG : 0 < G)
+-- Key arithmetic facts about relu on gate inputs
+-- When selector = 0: relu(0 + f - 1.5) * 2 = 0 for f ∈ {0,1}
+lemma relu_inactive_zero (f : ℝ) (hf : f = 0 ∨ f = 1) :
+    relu (0 + f - 1.5) * 2 = 0 := by
+  cases hf with
+  | inl h => simp [h, relu, max]
+  | inr h => simp [h, relu, max]
+
+-- When selector = 1: relu(1 + f - 1.5) * 2 = f for f ∈ {0,1}
+lemma relu_active_correct (f : ℝ) (hf : f = 0 ∨ f = 1) :
+    relu (1 + f - 1.5) * 2 = f := by
+  cases hf with
+  | inl h => simp [h, relu, max]
+  | inr h => simp [h, relu, max]; norm_num
+
+-- standardGates outputs are in {0,1} for inputs in {0,1}
+lemma standardGates_binary (t : Fin 7) (a b : ℝ)
+    (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) :
+    standardGates t a b = 0 ∨ standardGates t a b = 1 := by
+  fin_cases t <;>
+  simp [standardGates, boolAnd, boolOr, boolNot,
+        boolNand, boolXor, boolCopy, relu] <;>
+  cases ha with
+  | inl h => cases hb with
+    | inl h2 => simp [h, h2]; norm_num [max]
+    | inr h2 => simp [h, h2]; norm_num [max]
+  | inr h => cases hb with
+    | inl h2 => simp [h, h2]; norm_num [max]
+    | inr h2 => simp [h, h2]; norm_num [max]
+
+-- Inactive term contributes zero to the sum
+lemma reluGatedSelect_inactive_term (G : ℕ)
+    (selector : Fin G → ℝ)
+    (gates : Fin G → ℝ → ℝ → ℝ)
+    (a b : ℝ) (t : Fin G)
+    (hInactive : selector t = 0)
+    (hGate : gates t a b = 0 ∨ gates t a b = 1) :
+    relu (selector t + gates t a b - 1.5) * 2 = 0 := by
+  rw [hInactive]
+  exact relu_inactive_zero _ hGate
+
+-- Active term contributes gate output to the sum
+lemma reluGatedSelect_active_term (G : ℕ)
+    (selector : Fin G → ℝ)
+    (gates : Fin G → ℝ → ℝ → ℝ)
+    (a b : ℝ) (t : Fin G)
+    (hActive : selector t = 1)
+    (hGate : gates t a b = 0 ∨ gates t a b = 1) :
+    relu (selector t + gates t a b - 1.5) * 2 = gates t a b := by
+  rw [hActive]
+  exact relu_active_correct _ hGate
+
+-- Core lemma: sum over inactive indices contributes zero
+lemma foldl_inactive_zero (G : ℕ)
+    (selector : Fin G → ℝ)
+    (gates : Fin G → ℝ → ℝ → ℝ)
+    (a b : ℝ) (t* : Fin G)
+    (hInactive : ∀ t, t ≠ t* → selector t = 0)
+    (hGates : ∀ t, gates t a b = 0 ∨ gates t a b = 1) :
+    Fin.foldl G (fun acc t =>
+      if t = t* then acc
+      else acc + relu (selector t + gates t a b - 1.5) * 2) 0 = 0 := by
+  induction G with
+  | zero => simp [Fin.foldl]
+  | succ G ih =>
+    sorry
+
+-- Main theorem: reluGatedSelect with one-hot selector
+-- picks exactly the active gate
+theorem reluGatedSelect_oneHot (G : ℕ) (hG : 0 < G)
     (selector : Fin G → ℝ)
     (gates : Fin G → ℝ → ℝ → ℝ)
     (a b : ℝ)
-    (ha : a ∈ Set.Icc 0 1) (hb : b ∈ Set.Icc 0 1)
-    -- selector is one-hot: one entry is 1, rest are 0
+    (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1)
     (t* : Fin G)
     (hActive : selector t* = 1)
     (hInactive : ∀ t, t ≠ t* → selector t = 0)
-    -- each gate output is in {0,1}
-    (hGates : ∀ t a b, gates t a b ∈ ({0, 1} : Set ℝ)) :
+    (hGates : ∀ t, gates t a b = 0 ∨ gates t a b = 1) :
     reluGatedSelect G selector gates a b = gates t* a b := by
   simp [reluGatedSelect]
+  -- split the fold into active and inactive terms
+  have key : Fin.foldl G (fun acc t =>
+      acc + relu (selector t + gates t a b - 1.5) * 2) 0 =
+    Fin.foldl G (fun acc t =>
+      if t = t* then acc + gates t* a b
+      else acc + 0) 0 := by
+    congr 1
+    funext acc t
+    by_cases ht : t = t*
+    · subst ht
+      simp
+      rw [reluGatedSelect_active_term G selector gates a b t hActive (hGates t)]
+    · simp [ht]
+      rw [reluGatedSelect_inactive_term G selector gates a b t
+        (hInactive t ht) (hGates t)]
+  rw [key]
+  simp [Fin.foldl]
   sorry
 
--- The specific gate functions from BooleanGates.lean
--- packaged as a Fin 7 → ℝ → ℝ → ℝ function
-noncomputable def standardGates : Fin 7 → ℝ → ℝ → ℝ
-  | ⟨0, _⟩ => boolAnd
-  | ⟨1, _⟩ => boolOr
-  | ⟨2, _⟩ => fun a _ => boolNot a
-  | ⟨3, _⟩ => boolNand
-  | ⟨4, _⟩ => fun a _ => boolNot a  -- NOR placeholder
-  | ⟨5, _⟩ => boolXor
-  | ⟨6, _⟩ => boolCopy
-  | ⟨n+7, h⟩ => absurd h (by omega)
-
--- GateType to Fin 7 index
+-- Gate type selector is one-hot
 def gateTypeToFin : GateType → Fin 7
   | GateType.AND  => ⟨0, by omega⟩
   | GateType.OR   => ⟨1, by omega⟩
@@ -89,38 +127,57 @@ def gateTypeToFin : GateType → Fin 7
   | GateType.XOR  => ⟨5, by omega⟩
   | GateType.COPY => ⟨6, by omega⟩
 
--- One-hot selector for a gate type
-def gateSelector (g : GateType) : Fin 7 → ℝ :=
+noncomputable def standardGates : Fin 7 → ℝ → ℝ → ℝ
+  | ⟨0, _⟩ => boolAnd
+  | ⟨1, _⟩ => boolOr
+  | ⟨2, _⟩ => fun a _ => boolNot a
+  | ⟨3, _⟩ => boolNand
+  | ⟨4, _⟩ => fun a _ => boolNot a
+  | ⟨5, _⟩ => boolXor
+  | ⟨6, _⟩ => boolCopy
+  | ⟨n+7, h⟩ => absurd h (by omega)
+
+noncomputable def gateSelector (g : GateType) : Fin 7 → ℝ :=
   fun i => if i = gateTypeToFin g then 1 else 0
 
--- gateSelector is indeed one-hot
-lemma gateSelector_oneHot (g : GateType) :
-    (gateSelector g (gateTypeToFin g) = 1) ∧
-    (∀ i, i ≠ gateTypeToFin g → gateSelector g i = 0) := by
-  constructor
-  · simp [gateSelector]
-  · intro i hi
-    simp [gateSelector, hi]
+lemma gateSelector_active (g : GateType) :
+    gateSelector g (gateTypeToFin g) = 1 := by
+  simp [gateSelector]
 
--- Main FFN theorem: reluGatedSelect with standardGates
--- computes the correct gate function
+lemma gateSelector_inactive (g : GateType) (i : Fin 7)
+    (hi : i ≠ gateTypeToFin g) :
+    gateSelector g i = 0 := by
+  simp [gateSelector, hi]
+
+-- FFN correctness theorem
 theorem ffn_gate_selection_correct (g : GateType) (a b : ℝ)
-    (ha : a ∈ ({0, 1} : Set ℝ)) (hb : b ∈ ({0, 1} : Set ℝ)) :
+    (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) :
     reluGatedSelect 7 (gateSelector g) standardGates a b =
     standardGates (gateTypeToFin g) a b := by
-  obtain ⟨hActive, hInactive⟩ := gateSelector_oneHot g
-  apply reluGatedSelect_oneHot (by omega) _ _ _ _
-    (Set.mem_Icc.mpr ⟨by simp [Set.mem_insert_iff] at ha; cases ha with
-      | inl h => linarith [h.symm]
-      | inr h => simp at h; linarith, by simp [Set.mem_insert_iff] at ha;
-        cases ha with | inl h => linarith [h.symm] | inr h => simp at h; linarith⟩)
-    (Set.mem_Icc.mpr ⟨by simp [Set.mem_insert_iff] at hb; cases hb with
-      | inl h => linarith [h.symm]
-      | inr h => simp at h; linarith, by simp [Set.mem_insert_iff] at hb;
-        cases hb with | inl h => linarith [h.symm] | inr h => simp at h; linarith⟩)
-    _ hActive hInactive
-  intro t a' b'
-  fin_cases t <;> simp [standardGates, boolAnd, boolOr, boolNot,
-    boolNand, boolXor, boolCopy, relu] <;> sorry
+  apply reluGatedSelect_oneHot (by omega)
+  · exact gateSelector_active g
+  · exact fun t ht => gateSelector_inactive g t ht
+  · intro t
+    exact standardGates_binary t a b ha hb
+
+-- Bridge: real-valued matches Bool
+theorem realvalued_matches_bool (g : GateType) (a b : Bool) :
+    reluGatedSelect 7 (gateSelector g) standardGates
+      (if a then 1 else 0) (if b then 1 else 0) =
+    if applyGate g a b then 1 else 0 := by
+  have ha : (if a then (1:ℝ) else 0) = 0 ∨
+            (if a then (1:ℝ) else 0) = 1 := by
+    cases a <;> simp
+  have hb : (if b then (1:ℝ) else 0) = 0 ∨
+            (if b then (1:ℝ) else 0) = 1 := by
+    cases b <;> simp
+  rw [ffn_gate_selection_correct g _ _ ha hb]
+  fin_cases g <;>
+  fin_cases a <;>
+  fin_cases b <;>
+  simp [applyGate, gateTypeToFin, standardGates,
+        boolAnd, boolOr, boolNot, boolNand,
+        boolXor, boolCopy, relu] <;>
+  norm_num
 
 end AgentCompleteness
