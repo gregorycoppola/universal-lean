@@ -13,29 +13,24 @@ def flipInitConfig (tapeLen : ℕ) (hL : 0 < tapeLen) : TMConfig 2 tapeLen :=
     tape  := fun _ => false
     head  := ⟨0, hL⟩ }
 
--- Head position after d steps
 lemma flipTM_head_pos {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
     (hd : d < tapeLen) :
     (tmRun flipTM (flipInitConfig tapeLen hL) d hL).head = ⟨d, by omega⟩ := by
   induction d with
-  | zero =>
-    simp [tmRun, flipInitConfig]
+  | zero => simp [tmRun, flipInitConfig]
   | succ d ih =>
     have hd' : d < tapeLen := by omega
     rw [tmRun, ih hd']
     simp [tmStep, flipTM]
-    -- head moves right from d to d+1
     constructor
     · omega
     · rfl
 
--- State stays 0 throughout
 lemma flipTM_state_after {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
     (hd : d ≤ tapeLen) :
     (tmRun flipTM (flipInitConfig tapeLen hL) d hL).state = ⟨0, by omega⟩ := by
   induction d with
-  | zero =>
-    simp [tmRun, flipInitConfig]
+  | zero => simp [tmRun, flipInitConfig]
   | succ d ih =>
     have hd' : d ≤ tapeLen := by omega
     have hd'' : d < tapeLen := by omega
@@ -43,51 +38,15 @@ lemma flipTM_state_after {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
     simp [tmStep, flipTM]
     rfl
 
--- Tape at position i after d steps where i < d
-lemma flipTM_tape_before_head {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
-    (hd : d ≤ tapeLen) (i : Fin tapeLen) (hi : i.val < d) :
-    (tmRun flipTM (flipInitConfig tapeLen hL) d hL).tape i = true := by
-  induction d with
-  | zero => omega
-  | succ d ih =>
-    have hd' : d ≤ tapeLen := by omega
-    have hd'' : d < tapeLen := by omega
-    rw [tmRun]
-    simp [tmStep, flipTM]
-    -- rewrite using state and head lemmas
-    rw [flipTM_state_after hL d hd']
-    rw [flipTM_head_pos hL d hd'']
-    simp
-    by_cases hid : i.val < d
-    · -- position already flipped, just preserved
-      have prev := ih hd' hid
-      simp [prev]
-      intro heq
-      -- if i = d then contradiction with hid
-      have : i.val = d := by exact_mod_cast heq ▸ rfl
-      omega
-    · -- this is the step where i gets flipped
-      have heq : i.val = d := by omega
-      subst heq
-      simp
-      intro h
-      -- tape was false at init, so after flip it's true
-      have : (tmRun flipTM (flipInitConfig tapeLen hL) d hL).tape i = false := by
-        sorry
-      simp [this]
-
--- Initial tape is all false
 lemma flipInit_tape_false {tapeLen : ℕ} (hL : 0 < tapeLen) (i : Fin tapeLen) :
     (flipInitConfig tapeLen hL).tape i = false := by
   simp [flipInitConfig]
 
--- Positions ahead of head are untouched
 lemma flipTM_tape_after_head {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
     (hd : d ≤ tapeLen) (i : Fin tapeLen) (hi : d ≤ i.val) :
     (tmRun flipTM (flipInitConfig tapeLen hL) d hL).tape i = false := by
   induction d with
-  | zero =>
-    simp [tmRun, flipInitConfig]
+  | zero => simp [tmRun, flipInitConfig]
   | succ d ih =>
     have hd' : d ≤ tapeLen := by omega
     have hd'' : d < tapeLen := by omega
@@ -98,17 +57,13 @@ lemma flipTM_tape_after_head {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
     rw [flipTM_head_pos hL d hd'']
     simp
     intro heq
-    -- i ≠ d since d ≤ i and i ≠ d
     have hne : i.val ≠ d := by omega
     have : i ≠ ⟨d, hd''⟩ := by
-      intro h
-      apply hne
-      exact congrArg Fin.val h
+      intro h; apply hne; exact congrArg Fin.val h
     simp [this]
     exact ih hd' hi'
 
--- Now tape_before_head closes cleanly using tape_after_head
-lemma flipTM_tape_before_head' {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
+lemma flipTM_tape_before_head {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
     (hd : d ≤ tapeLen) (i : Fin tapeLen) (hi : i.val < d) :
     (tmRun flipTM (flipInitConfig tapeLen hL) d hL).tape i = true := by
   induction d with
@@ -122,30 +77,22 @@ lemma flipTM_tape_before_head' {tapeLen : ℕ} (hL : 0 < tapeLen) (d : ℕ)
     rw [flipTM_head_pos hL d hd'']
     simp
     by_cases hid : i.val < d
-    · -- already flipped, preserved
-      have prev := ih hd' hid
+    · have prev := ih hd' hid
       have hne : i ≠ ⟨d, hd''⟩ := by
-        intro h
-        have : i.val = d := congrArg Fin.val h
-        omega
+        intro h; have : i.val = d := congrArg Fin.val h; omega
       simp [hne, prev]
-    · -- flipped at this exact step
-      have heq : i.val = d := by omega
-      have hifin : i = ⟨d, hd''⟩ := by
-        apply Fin.ext; exact heq
+    · have heq : i.val = d := by omega
+      have hifin : i = ⟨d, hd''⟩ := by apply Fin.ext; exact heq
       subst hifin
       simp
-      -- was false before (ahead of head), now flipped to true
       have := flipTM_tape_after_head hL d hd' ⟨d, hd''⟩ (le_refl d)
       simp at this
       simp [this]
 
--- Main lemma using the cleaner version
 lemma flipTM_flips_all {tapeLen : ℕ} (hL : 0 < tapeLen) (i : Fin tapeLen) :
     (tmRun flipTM (flipInitConfig tapeLen hL) tapeLen hL).tape i = true :=
-  flipTM_tape_before_head' hL tapeLen (le_refl _) i i.isLt
+  flipTM_tape_before_head hL tapeLen (le_refl _) i i.isLt
 
--- Clean end-to-end theorem
 theorem flipTM_circuit_correct {tapeLen depth : ℕ}
     (hL : 0 < tapeLen) (hd : 0 < depth)
     (i : Fin tapeLen) :
