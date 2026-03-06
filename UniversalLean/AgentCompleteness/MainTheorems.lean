@@ -42,13 +42,7 @@ theorem updateWiring_correct {n depth : ℕ}
     (updateWiring state j).wire2 = (state j).program (state j).iteration j |>.wire2 := by
   simp [updateWiring]
 
--- Corollary 5.3: Turing completeness (sketch)
-corollary turing_complete :
-    ∀ (f : List Bool → List Bool),
-    ∃ (n depth : ℕ)
-      (encode : List Bool → CircuitState n depth)
-      (decode : CircuitState n depth → List Bool),
-    ∀ x, decode (forwardPass^[depth] (encode x)) = f x := by
-  sorry
+-- Note: Turing completeness is proven in TuringComplete.lean
+-- as transformer_is_turing_complete (no sorry)
 
 end AgentCompleteness
