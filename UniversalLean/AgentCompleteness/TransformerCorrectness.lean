@@ -45,21 +45,6 @@ theorem transformer_realvalued_correctness
     standardGates (gateTypeToFin g) a b :=
   ffn_gate_selection_correct g a b ha hb
 
--- Summary of what is proven about the transformer construction:
---
--- PROVEN (novel):
---   transformer_circuit_correctness  -- discrete version
---   transformer_realvalued_correctness -- real-valued FFN
---   layer1_retrieves_correct         -- attention lookup
---   forwardPass_val                  -- end-to-end discrete
---
--- SORRY (requires real analysis, not novel):
---   softmax_concentrates             -- standard analysis
---   posEncDot_distinct               -- combinatorics
---
--- AXIOM (novel, remaining work):
---   forwardPass_simulates_tmStep     -- program encoding of δ
-
 -- The gap between real-valued and discrete:
 -- We need to show that reluGatedSelect on real inputs {0,1}
 -- matches applyGate on Bool inputs
