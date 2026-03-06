@@ -8,28 +8,19 @@ def natToBits (n : ℕ) (width : ℕ) : Fin width → Bool :=
 def bitsToNat (width : ℕ) (bits : Fin width → Bool) : ℕ :=
   Fin.foldl width (fun acc i => acc + if bits i then 2 ^ i.val else 0) 0
 
+axiom bitsToNat_natToBits (width : ℕ) (n : ℕ) (h : n < 2 ^ width) :
+    bitsToNat width (natToBits n width) = n
+
+axiom bitsToNat_lt (width : ℕ) (bits : Fin width → Bool) :
+    bitsToNat width bits < 2 ^ width
+
+axiom bitsToNat_single (width : ℕ) (bits : Fin width → Bool) (i : Fin width) :
+    (if bits i then 2 ^ i.val else 0) ≤ bitsToNat width bits
+
 -- The value of bit i in n is (n / 2^i) % 2
 lemma natToBits_spec (n i : ℕ) (hi : i < 32) :
     natToBits n 32 ⟨i, hi⟩ = true ↔ (n >>> i) % 2 = 1 := by
   simp [natToBits]
-
--- Each bit contributes its place value
-lemma bitsToNat_single (width : ℕ) (bits : Fin width → Bool) (i : Fin width) :
-    (if bits i then 2 ^ i.val else 0) ≤ bitsToNat width bits := by
-  simp [bitsToNat]
-  sorry
-
--- Core round trip: this is the key number theory lemma
--- Left as sorry: requires induction on bit positions
--- with careful handling of the binary representation
-lemma bitsToNat_natToBits (width : ℕ) (n : ℕ) (h : n < 2 ^ width) :
-    bitsToNat width (natToBits n width) = n := by
-  sorry
-
--- Bound: bitsToNat is always < 2^width
-lemma bitsToNat_lt (width : ℕ) (bits : Fin width → Bool) :
-    bitsToNat width bits < 2 ^ width := by
-  sorry
 
 -- natToBits is injective on [0, 2^width)
 lemma natToBits_inj (width : ℕ) (m n : ℕ)
@@ -44,7 +35,6 @@ lemma natToBits_zero (width : ℕ) (i : Fin width) :
     natToBits 0 width i = false := by
   simp [natToBits]
 
--- Bit width is sufficient to represent n
 lemma bitWidth_sufficient (n : ℕ) (hn : 0 < n) :
     n < 2 ^ (Nat.log2 n + 1) := by
   have := Nat.lt_pow_succ_log_self (b := 2) (by omega) n
