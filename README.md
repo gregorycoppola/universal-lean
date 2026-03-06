@@ -4,7 +4,10 @@ A Lean 4 formalization of the paper:
 
 > **Agent Completeness via Circuit Simulation:
 > A Natural Proof that Transformer Agents are Universal Computers**
-> Greg Coppola, PhD (coppola.ai, March 2026)
+> Greg Coppola, PhD (March 2026)
+
+The paper is included in this repository:
+[paper-drafts/attention-agent-turing-complete.pdf](paper-drafts/attention-agent-turing-complete.pdf)
 
 ## What This Is
 
@@ -139,6 +142,7 @@ This formalization is part of a three-paper series:
 
 1. **Coppola (2024)** — The Quantified Boolean Bayesian Network
 2. **Coppola (2026a)** — Statistical Parsing for Logical Information Retrieval
+   [paper-drafts/uniersal-language-semantics-paper.pdf](paper-drafts/uniersal-language-semantics-paper.pdf)
 3. **Coppola (2026b)** — The Universal Language: A Characteristica Universalis for AI
 
 The Turing completeness proof connects transformer computation
@@ -159,6 +163,5 @@ to the characteristica universalis framework via the correspondence:
              A Natural Proof that Transformer Agents are
              Universal Computers},
       author={Coppola, Greg},
-      year={2026},
-      url={https://coppola.ai}
+      year={2026}
     }
