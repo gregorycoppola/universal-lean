@@ -17,12 +17,10 @@ axiom bitsToNat_lt (width : ℕ) (bits : Fin width → Bool) :
 axiom bitsToNat_single (width : ℕ) (bits : Fin width → Bool) (i : Fin width) :
     (if bits i then 2 ^ i.val else 0) ≤ bitsToNat width bits
 
--- The value of bit i in n is (n / 2^i) % 2
 lemma natToBits_spec (n i : ℕ) (hi : i < 32) :
     natToBits n 32 ⟨i, hi⟩ = true ↔ (n >>> i) % 2 = 1 := by
   simp [natToBits]
 
--- natToBits is injective on [0, 2^width)
 lemma natToBits_inj (width : ℕ) (m n : ℕ)
     (hm : m < 2 ^ width) (hn : n < 2 ^ width)
     (h : natToBits m width = natToBits n width) : m = n := by
@@ -30,7 +28,6 @@ lemma natToBits_inj (width : ℕ) (m n : ℕ)
   have hn' := bitsToNat_natToBits width n hn
   rw [← hm', ← hn', h]
 
--- Zero encodes to all false
 lemma natToBits_zero (width : ℕ) (i : Fin width) :
     natToBits 0 width i = false := by
   simp [natToBits]
@@ -45,5 +42,9 @@ def bitWidth (n : ℕ) : ℕ := Nat.log2 n + 1
 lemma bitWidth_spec (n : ℕ) (hn : 0 < n) :
     n < 2 ^ bitWidth n :=
   bitWidth_sufficient n hn
+
+lemma natToBits_bit (n width : ℕ) (i : Fin width) :
+    natToBits n width i = true ↔ (n >>> i.val) % 2 = 1 := by
+  simp [natToBits]
 
 end AgentCompleteness

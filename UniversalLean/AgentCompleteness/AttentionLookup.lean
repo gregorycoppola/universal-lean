@@ -3,14 +3,6 @@ import UniversalLean.AgentCompleteness.Binary
 
 namespace AgentCompleteness
 
-axiom distinct_differ_in_bit (b i j : ℕ)
-    (hi : i < 2^b) (hj : j < 2^b) (hij : i ≠ j) :
-    ∃ k : Fin b, (i >>> k.val) % 2 ≠ (j >>> k.val) % 2
-
-axiom posEncDot_distinct (b : ℕ) (hb : 0 < b) (i j : ℕ)
-    (hi : i < 2^b) (hj : j < 2^b) (hij : i ≠ j) :
-    posEncDot b i j ≤ (b : ℤ) - 2
-
 axiom softmax_concentrates {n : ℕ} (hn : 0 < n)
     (scores : Fin n → ℝ) (t* : Fin n)
     (hmax : ∀ i, i ≠ t* → scores i ≤ scores t* - 2)
@@ -54,6 +46,91 @@ lemma posEnc_same_term (b i j : ℕ) (k : Fin b)
     posEnc b i k * posEnc b j k = 1 := by
   simp [posEnc]
   split <;> split <;> simp_all <;> omega
+
+lemma posEnc_term_pm1 (b i j : ℕ) (k : Fin b) :
+    posEnc b i k * posEnc b j k = 1 ∨ posEnc b i k * posEnc b j k = -1 := by
+  rcases Decidable.em ((i >>> k.val) % 2 = (j >>> k.val) % 2) with h | h
+  · left; exact posEnc_same_term b i j k h
+  · right; exact posEnc_diff_term b i j k h
+
+-- Fold bound: sum of b terms each in {-1,+1} is at most b
+lemma posEncDot_le_b (b i j : ℕ) : posEncDot b i j ≤ b := by
+  simp only [posEncDot]
+  induction b with
+  | zero => simp [Fin.foldl]
+  | succ b ih =>
+    rw [Fin.foldl_succ]
+    have hterm := posEnc_term_pm1 (b + 1) i j ⟨b, Nat.lt_succ_self b⟩
+    have hprev : Fin.foldl b (fun acc k => acc +
+        posEnc (b + 1) i k * posEnc (b + 1) j k) 0 ≤ b := by
+      have : posEncDot b i j ≤ b := ih
+      simp [posEncDot] at this
+      convert this using 2
+      funext k
+      simp [posEnc]
+    cases hterm with
+    | inl h => simp [h]; omega
+    | inr h => simp [h]; omega
+
+-- Fold bound: if one specific term equals -1, sum is at most b - 2
+lemma posEncDot_with_diff_term (b i j : ℕ) (k₀ : Fin b)
+    (hdiff : posEnc b i k₀ * posEnc b j k₀ = -1) :
+    posEncDot b i j ≤ (b : ℤ) - 2 := by
+  simp only [posEncDot]
+  induction b with
+  | zero => exact absurd k₀.isLt (Nat.not_lt_zero _)
+  | succ b ih =>
+    rw [Fin.foldl_succ]
+    by_cases hk : k₀.val = b
+    · -- k₀ is the last term
+      have hk₀ : k₀ = ⟨b, Nat.lt_succ_self b⟩ := Fin.ext hk
+      subst hk₀
+      have hprev : Fin.foldl b (fun acc k => acc +
+          posEnc (b + 1) i k * posEnc (b + 1) j k) 0 ≤ b := by
+        have := posEncDot_le_b b i j
+        simp [posEncDot] at this
+        convert this using 2
+        funext k; simp [posEnc]
+      simp [hdiff]; omega
+    · -- k₀ is in the first b terms
+      have hk₀lt : k₀.val < b := Nat.lt_of_le_of_ne
+        (Nat.lt_succ_iff.mp k₀.isLt) hk
+      have hdiff' : posEnc b i ⟨k₀.val, hk₀lt⟩ *
+                    posEnc b j ⟨k₀.val, hk₀lt⟩ = -1 := by
+        simp [posEnc] at hdiff ⊢; exact hdiff
+      have hprev := ih ⟨k₀.val, hk₀lt⟩ hdiff'
+      simp [posEncDot] at hprev
+      have hlast := posEnc_term_pm1 (b + 1) i j ⟨b, Nat.lt_succ_self b⟩
+      cases hlast with
+      | inl h => simp [h]; omega
+      | inr h => simp [h]; omega
+
+-- Proven: distinct indices differ in at least one bit position
+lemma distinct_differ_in_bit (b i j : ℕ)
+    (hi : i < 2^b) (hj : j < 2^b) (hij : i ≠ j) :
+    ∃ k : Fin b, (i >>> k.val) % 2 ≠ (j >>> k.val) % 2 := by
+  by_contra h
+  push_neg at h
+  have heq : natToBits i b = natToBits j b := by
+    funext k
+    simp only [natToBits, beq_iff_eq]
+    constructor
+    · intro hi1
+      have := h k
+      simp only [natToBits, beq_iff_eq] at this
+      omega
+    · intro hj1
+      have := h k
+      simp only [natToBits, beq_iff_eq] at this
+      omega
+  exact hij (natToBits_inj b i j hi hj heq)
+
+-- Proven: distinct positional encodings have dot product ≤ b - 2
+lemma posEncDot_distinct (b : ℕ) (hb : 0 < b) (i j : ℕ)
+    (hi : i < 2^b) (hj : j < 2^b) (hij : i ≠ j) :
+    posEncDot b i j ≤ (b : ℤ) - 2 := by
+  obtain ⟨k, hk⟩ := distinct_differ_in_bit b i j hi hj hij
+  exact posEncDot_with_diff_term b i j k (posEnc_diff_term b i j k hk)
 
 lemma posEncDot_self_max (b : ℕ) (hb : 0 < b) (i j : ℕ)
     (hi : i < 2^b) (hj : j < 2^b) (hij : i ≠ j) :
