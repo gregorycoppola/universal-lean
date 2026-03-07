@@ -42,15 +42,29 @@ the b terms is posEnc(i,k)^2 = 1, so the fold accumulates to b.
 posEnc_sq — Each term posEnc(i,k) * posEnc(i,k) = 1. Proved by case split
 on whether bit k of i is 0 or 1.
 
-distinct_differ_in_bit (axiom) — If i ≠ j and both are less than 2^b, they
-differ in at least one bit position. Standard number theory.
+posEnc_term_pm1 — Each cross term posEnc(i,k) * posEnc(j,k) is either +1
+or -1. Proved by case split using posEnc_same_term and posEnc_diff_term.
 
-posEncDot_distinct (axiom) — If i ≠ j, their dot product is at most b-2.
-The differing bit contributes -1; all other b-1 bits contribute at most +1;
-so the total is at most (b-1) - 1 = b-2. Standard combinatorics.
+posEncDot_le_b — The dot product of any two encodings is at most b. Proved
+by induction on b: each term contributes at most +1, so the fold is bounded
+by the number of terms.
+
+posEncDot_with_diff_term — If a specific term k contributes -1, the total
+dot product is at most b-2. Proved by induction on b, case splitting on
+whether k is the last term or lies in the first b terms.
+
+distinct_differ_in_bit (proven) — If i ≠ j and both are less than 2^b,
+they differ in at least one bit position. Proved by contradiction: if all
+bits agree then natToBits i b = natToBits j b, which by natToBits_inj
+implies i = j, contradicting the hypothesis.
+
+posEncDot_distinct (proven) — If i ≠ j, their dot product is at most b-2.
+Proved by combining distinct_differ_in_bit (which gives a differing bit k),
+posEnc_diff_term (the term at k equals -1), and posEncDot_with_diff_term
+(one -1 term forces the total to be at most b-2).
 
 posEncDot_self_max — The self dot product b strictly exceeds any cross dot
-product (at most b-2). Direct consequence of the two lemmas above.
+product (at most b-2). Direct consequence of posEncDot_distinct.
 
 softmax_concentrates (axiom) — With temperature lambda = O(log(n/eps)/2),
 the softmax weight on the maximum-score position is at least 1-eps.
