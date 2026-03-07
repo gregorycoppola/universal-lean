@@ -122,7 +122,7 @@ agent follows across steps).
 
 ## Axioms
 
-Nine classical mathematical facts are stated as axioms rather than proved.
+Seven classical mathematical facts are stated as axioms rather than proved.
 These are all standard results — binary representation round-trips, DNF
 completeness, softmax concentration — that Mathlib would close automatically.
 No novel claim is axiomatized.
